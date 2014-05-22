@@ -13,6 +13,13 @@ module Language.Haskell.Meta.Parse (
   parseExp,
   parseType,
   parseDecs,
+
+  parseDecsQQ,
+  parseExpQQ,
+  parsePatQQ,
+  extractQQ,
+  substQQ,
+
   myDefaultParseMode,
   myDefaultExtensions,
   parseResultToEither,
@@ -35,6 +42,12 @@ import Language.Haskell.Exts.Extension
 import Language.Haskell.Exts.Parser hiding (parseExp, parseType, parsePat)
 import Language.Haskell.Exts.Pretty
 
+
+import Language.Haskell.Meta.SubstQQ (substQQ)
+import Language.Haskell.Meta.ExtractQQ (extractQQ)
+import Data.Map (Map)
+import Language.Haskell.TH.Quote (QuasiQuoter)
+
 -----------------------------------------------------------------------------
 
 -- * template-haskell
@@ -50,6 +63,24 @@ parseType = either Left (Right . toType) . parseHsType
 
 parseDecs :: String -> Either String [Dec]
 parseDecs  = either Left (Right . toDecs) . parseHsDecls
+
+
+
+parseDecsQQ :: ParseMode -> Map String QuasiQuoter -> String -> Q [Dec]
+parseDecsQQ parseMode qqs str = either fail (substExtract (toDecs . moduleDecls) qqs)
+    $ parseResultToEither (parseModuleWithMode parseMode str)
+
+parseExpQQ :: ParseMode -> Map String QuasiQuoter -> String -> Q Exp
+parseExpQQ parseMode qqs str = either fail (substExtract toExp qqs)
+    $ parseResultToEither (parseExpWithMode parseMode str)
+
+parsePatQQ :: ParseMode -> Map String QuasiQuoter -> String -> Q Pat
+parsePatQQ parseMode qqs str = either fail (substExtract toPat qqs)
+    $ parseResultToEither (parsePatWithMode parseMode str)
+
+substExtract translate qqs ast = do
+    (ast', ranQQ) <- extractQQ qqs ast
+    return $ substQQ ranQQ (translate ast')
 
 -----------------------------------------------------------------------------
 
